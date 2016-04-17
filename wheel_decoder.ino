@@ -1,7 +1,3 @@
-
-
-#define DEBUG 1
-
 #define EN_PIN 2
 
 #define PLAY_PIN 5
@@ -13,8 +9,6 @@ HardwareSerial & kbus = Serial1;
 byte kbus_data[32] = { 0 };
 
 String message = "adcurtin";
-// String message = "123456789ab"; //max length message
-
 
 void setup(){
 
@@ -27,52 +21,20 @@ void setup(){
 
     pinMode(0, INPUT_PULLUP);
 
-#ifdef DEBUG
-    Serial.begin(57600);
-    pinMode(13, OUTPUT);
-    digitalWrite(13, HIGH);
-    delay(5000);
-    digitalWrite(13, LOW);
-    Serial.println("started");
-#endif
-
-
     pinMode(EN_PIN, OUTPUT);
     digitalWrite(EN_PIN, HIGH);
-
     kbus.begin(9600, SERIAL_8E1);
     kbus_print(message);
 
 }
 
 void loop(){
-
-    delay(10);
-
-    // press(PLAY_PIN);
-    // Serial.println("pressed play");
-    // delay(2000);
-
-    // press(PLAY_PIN);
-    // Serial.println("pressed play");
-
-    // delay(10000);
-    // press(NEXT_PIN);
-    // Serial.println("pressed next");
-
-
+    // delay(1);
     int bytes_read = 0;
     bytes_read = read_kbus_packet();
     if(bytes_read > 0){
-        // if(kbus_data[2] == 0x68 || kbus_data[2] == 0xC8) {
-        //     Serial.println("recd packet to radio or phone");
-        //     print_packet();
-        // }
         parse_packet();
     }
-    // delay(200);
-
-
 }
 
 /* check kbus for data. if any available, block until whole packet is read.
@@ -85,7 +47,6 @@ int read_kbus_packet(){
     if(kbus.available() > 1){
         kbus_data[0] = kbus.read(); //first byte of message is ID of sending device
         kbus_data[1] = kbus.read(); //second byte is bytes remaining in packet
-        // Serial.println("read 2 bytes from kbus packet");
     } else {
         return 0; //nothing available, nothing read.
     }
@@ -95,19 +56,9 @@ int read_kbus_packet(){
         kbus_data[2 + i] = kbus.read();
     }
 
-    //verify checksum
     byte crc = checksum(kbus_data, 2 + kbus_data[1]);
 
     if(kbus_data[1 + kbus_data[1]] != crc){
-#ifdef DEBUG
-        Serial.println("-------------------------");
-        Serial.print("Checksum mismatch! expected: ");
-        Serial.print(crc, HEX);
-        Serial.print(" got: ");
-        Serial.println(kbus_data[1 + kbus_data[1]], HEX);
-        print_packet();
-        Serial.println("-------------------------x");
-#endif
         return 0; //no valid bytes read. can't really handle errors.
     }
 
@@ -193,25 +144,6 @@ byte checksum(byte data[], int packet_length){
     return crc;
 }
 
-#ifdef DEBUG
-void print_packet(){
-    Serial.print("recieved kbus packet: ");
-    for(int i = 0; i < (2+kbus_data[1]); i++){
-        Serial.print(kbus_data[i], HEX);
-        Serial.print(".");
-    }
-    Serial.println("");
-}
-
-void print_part(int start){
-    for(int i = start; i < (2+kbus_data[1]); i++){
-        Serial.print(kbus_data[i], HEX);
-        Serial.print(":");
-    }
-    Serial.println("");
-}
-#endif
-
 //takes a string and prints the first 11 characters to the display
 //need to fix scrolling later
 void kbus_print(String message){
@@ -235,13 +167,7 @@ void kbus_print(String message){
 
     int out_len = 2 + out_data[1]; //will always transmit right number of bytes
     kbus.write(out_data, out_len);
-    delay(2); //low priority messages, idle for 2ms after transmission
-    Serial.print("kbus send data: ");
-    for(i=0;i<out_len;i++){
-        Serial.print(out_data[i], HEX);
-        Serial.print(":");
-    }
-    Serial.println("");
+    delay(2); //low priority messages, idle for 2ms after transmission to rate limit
     return;
 }
 
