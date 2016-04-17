@@ -8,7 +8,9 @@
 #define NEXT_PIN 6
 #define PREV_PIN 7
 
+//portability, can easily change serial ports globally
 HardwareSerial & kbus = Serial1;
+HardwareSerial & usb = Serial;
 
 byte kbus_data[32] = { 0 };
 
@@ -28,12 +30,12 @@ void setup(){
     pinMode(0, INPUT_PULLUP);
 
 #ifdef DEBUG
-    Serial.begin(57600);
+    usb.begin(57600);
     pinMode(13, OUTPUT);
     digitalWrite(13, HIGH);
     delay(5000);
     digitalWrite(13, LOW);
-    Serial.println("started");
+    usb.println("started");
 #endif
 
 
@@ -50,22 +52,22 @@ void loop(){
     delay(10);
 
     // press(PLAY_PIN);
-    // Serial.println("pressed play");
+    // usb.println("pressed play");
     // delay(2000);
 
     // press(PLAY_PIN);
-    // Serial.println("pressed play");
+    // usb.println("pressed play");
 
     // delay(10000);
     // press(NEXT_PIN);
-    // Serial.println("pressed next");
+    // usb.println("pressed next");
 
 
     int bytes_read = 0;
     bytes_read = read_kbus_packet();
     if(bytes_read > 0){
         // if(kbus_data[2] == 0x68 || kbus_data[2] == 0xC8) {
-        //     Serial.println("recd packet to radio or phone");
+        //     usb.println("recd packet to radio or phone");
         //     print_packet();
         // }
         parse_packet();
@@ -85,7 +87,7 @@ int read_kbus_packet(){
     if(kbus.available() > 1){
         kbus_data[0] = kbus.read(); //first byte of message is ID of sending device
         kbus_data[1] = kbus.read(); //second byte is bytes remaining in packet
-        // Serial.println("read 2 bytes from kbus packet");
+        // usb.println("read 2 bytes from kbus packet");
     } else {
         return 0; //nothing available, nothing read.
     }
@@ -100,13 +102,13 @@ int read_kbus_packet(){
 
     if(kbus_data[1 + kbus_data[1]] != crc){
 #ifdef DEBUG
-        Serial.println("-------------------------");
-        Serial.print("Checksum mismatch! expected: ");
-        Serial.print(crc, HEX);
-        Serial.print(" got: ");
-        Serial.println(kbus_data[1 + kbus_data[1]], HEX);
+        usb.println("-------------------------");
+        usb.print("Checksum mismatch! expected: ");
+        usb.print(crc, HEX);
+        usb.print(" got: ");
+        usb.println(kbus_data[1 + kbus_data[1]], HEX);
         print_packet();
-        Serial.println("-------------------------x");
+        usb.println("-------------------------x");
 #endif
         return 0; //no valid bytes read. can't really handle errors.
     }
@@ -126,14 +128,14 @@ void parse_packet(){
             switch (kbus_data[4]) {
                 case 0x01: //next pressed
                     press(NEXT_PIN);
-                    Serial.println("next pressed");
+                    usb.println("next pressed");
                     break;
                 case 0x11: //next held
                 case 0x21: //next released
                     break;
                 case 0x08: //previous pressed
                     press(PREV_PIN);
-                    Serial.println("previous pressed");
+                    usb.println("previous pressed");
                     break;
                 case 0x18: //previous held
                 case 0x28: //previous released
@@ -152,10 +154,10 @@ void parse_packet(){
                 //if held, this is hold the play button, the press function will
                 //release it when the button is released.
                 digitalWrite(PLAY_PIN, HIGH);
-                Serial.println("play held");
+                usb.println("play held");
             } else if(kbus_data[4] == 0xA0){ //released
                 press(PLAY_PIN);
-                Serial.println("play pressed");
+                usb.println("play pressed");
             }
         }
     } else {
@@ -195,20 +197,20 @@ byte checksum(byte data[], int packet_length){
 
 #ifdef DEBUG
 void print_packet(){
-    Serial.print("recieved kbus packet: ");
+    usb.print("recieved kbus packet: ");
     for(int i = 0; i < (2+kbus_data[1]); i++){
-        Serial.print(kbus_data[i], HEX);
-        Serial.print(".");
+        usb.print(kbus_data[i], HEX);
+        usb.print(".");
     }
-    Serial.println("");
+    usb.println("");
 }
 
 void print_part(int start){
     for(int i = start; i < (2+kbus_data[1]); i++){
-        Serial.print(kbus_data[i], HEX);
-        Serial.print(":");
+        usb.print(kbus_data[i], HEX);
+        usb.print(":");
     }
-    Serial.println("");
+    usb.println("");
 }
 #endif
 
@@ -236,12 +238,12 @@ void kbus_print(String message){
     int out_len = 2 + out_data[1]; //will always transmit right number of bytes
     kbus.write(out_data, out_len);
     delay(2); //low priority messages, idle for 2ms after transmission
-    Serial.print("kbus send data: ");
+    usb.print("kbus send data: ");
     for(i=0;i<out_len;i++){
-        Serial.print(out_data[i], HEX);
-        Serial.print(":");
+        usb.print(out_data[i], HEX);
+        usb.print(":");
     }
-    Serial.println("");
+    usb.println("");
     return;
 }
 
