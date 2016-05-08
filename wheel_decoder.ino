@@ -315,12 +315,15 @@ void kbus_print(String message){
     while (clearToSend == 0) {
         //TODO remove this for production
         #ifdef DEBUG
-        usb.print("waiting for kbus holdoff\r");
+        if (tref > 1) //print this message every ms or so
+        {
+            usb.print("waiting for kbus holdoff\r");
+            tref = 0;
+        }
         #endif
     }
     if (clearToSend)
     {
-        // noInterrupts();
         kbus.clear(); //there shouldn't be anything on new on the bus if we're clear to send
         kbus.write(out_data, out_len);
         //we should get this data right back
@@ -340,15 +343,6 @@ void kbus_print(String message){
     #endif
     return;
 }
-
-// emulate what the radio can print, only 11 characters and 1 line
-// void radio_print(String message)
-// {
-//     lcd.setCursor(0,0);
-//     lcd.print("           "); //only blank 11 spaces to preserve overwrites
-//     lcd.setCursor(0,0);
-//     lcd.print(message.c_str()); //print whole string, this function shouldn't be gien a string longer than 11 chars.
-// }
 
 //print the next message in the buffer
 void print_buffer()
@@ -378,14 +372,12 @@ void update_display_buffer(String message, byte reset)
     int i = 0;
     if (reset == 1 || buf_len > DISPLAY_BUFFER_SIZE)
     {
-        // noInterrupts();
         buf_len = 0;
         buf_i = 0;
         for (i = 0; i < 8; i++)
         {
             display_buffer[i] = "";
         }
-        // interrupts();
     }
 
     if (message.length() > 55) message = message.substring(0,55); //limit each data to display cycles so whole message can be displayed
@@ -394,23 +386,15 @@ void update_display_buffer(String message, byte reset)
     while (message.length() > 11)
     {
         //copy first 11 characters of message to display buffer (+ null byte?)
-        // message.toCharArray(display_buffer[buf_len], 12);
-        // noInterrupts();
         display_buffer[buf_len] = message.substring(0, 11);
         buf_len++;
-        // if (buf_len > DISPLAY_BUFFER_SIZE) buf_len = 0; //don't handle gracefully
-        // interrupts();
         //remove first 11 chars from message (0 indexed)
         message = message.substring(11, message.length());
     }
 
     //message is now 11 or less characters. copy whole message to buffer
-    // message.toCharArray(display_buffer[buf_len], message.length() + 1); //+1 for null byte
     display_buffer[buf_len] = message.substring(0, message.length());
     buf_len++;
-
-    // //bounds check on buffer
-    // if (buf_len >= 8) buf_len = 0;
     return;
 }
 
@@ -481,10 +465,6 @@ void read_and_parse_bc127_packet()
             bc127_buffer += (char) tmp; //bc127.read();
             // usb.print(tmp);
         }
-        else
-        {
-            // usb.print("asdlkjh\r");
-        }
         if (bc127_timeout > 3000) //timeout after 200ms
         {
             #ifdef DEBUG
@@ -552,18 +532,11 @@ void read_and_parse_bc127_packet()
         }
         //we've finished reading in the metadata we care about, print the buffer
         //could move this to "AVRCP_MEDIA PLAYING_TIME(MS): " clause
-        // print_buffer();
     }
     else if (bc127_buffer.startsWith("OPEN_OK 11 AVRCP"))
     {
-        //automatically start music. make sure to do this after getting metadata so we can read the response
+        //automatically start music on powerup / connection
         bc127_command("MUSIC 11 PLAY");
-        // read_and_parse_bc127_packet(); //catch the response to command and update music_playing
-
-        // bc127_command("AVRCP_META_DATA 11");
-        // tref = 0;
-        // Timer3.initialize(3000000);
-        // Timer3.attachInterrupt(print_buffer);
         display_timer.begin(print_buffer, 3000000);
     }
     bc127_buffer = "";
