@@ -110,14 +110,14 @@ void setup(){
 
 void loop(){
 
-    delay(1);
+    // delay(1);
 
     int bytes_read = 0;
     bytes_read = read_kbus_packet();
     if(bytes_read > 0){
         // if(kbus_data[2] == 0x68 || kbus_data[2] == 0xC8) {
-        //     usb.println("recd packet to radio or phone");
-        //     print_packet();
+            // usb.println("recd packet to radio or phone");
+            // print_packet();
         // }
         parse_packet();
     }
@@ -321,7 +321,10 @@ void kbus_print(String message){
 
     //wait until it's clear to send the message
     while (clearToSend == 0) {
+        //TODO remove this for production
+        #ifdef DEBUG
         usb.print("waiting for kbus holdoff\r");
+        #endif
     }
     if(clearToSend) kbus.write(out_data, out_len);
     // delay(2); //low priority messages, idle for 2ms after transmission
@@ -553,7 +556,8 @@ void startHoldoff()
     if(clearToSend){
         clearToSend = 0;
         holdoffTimer.begin(endHoldoff, 2000);
-        usb.print("start holdoff. cts = 0\r");
+        holdoffTimer.priority(64);
+        // usb.print("start holdoff. cts = 0\r");
     }
 }
 
@@ -561,7 +565,7 @@ void endHoldoff()
 {
     clearToSend = 1;
     holdoffTimer.end(); //just a one shot timer
-    usb.print("end holdoff. cts = 1\r");
+    // usb.print("end holdoff. cts = 1\r");
 }
 
 void metadata_request()
