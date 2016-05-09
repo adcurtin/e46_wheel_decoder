@@ -107,6 +107,8 @@ void setup(){
     // kbus.begin(9600);
     kbus_print("adcurtin");
 
+    display_timer.begin(print_buffer, 3000000);
+
 }
 
 void loop(){
@@ -146,14 +148,14 @@ int read_kbus_packet(){
     }
 
     for(int i = 0; i < kbus_data[1]; i++){
-        while(kbus_timeout < 2000){
+        while(kbus_timeout < 500){
             if(kbus.available()){
                 kbus_data[2 + i] = kbus.read();
                 break; //out of while loop, read next data
             }
         } //wait for data to be available
     }
-    if(kbus_timeout >= 2000){
+    if(kbus_timeout >= 500){
         #ifdef DEBUG
         usb.print("kbus timeout!\r");
         #endif
@@ -213,10 +215,16 @@ void parse_packet(){
         if(kbus_data[3] == 0x01){ // R/T button pressed
             if(printMetadata){
                 printMetadata = 0;
+                #ifdef DEBUG
+                usb.print("printMetadata = 0\r");
+                #endif
             }
             else
             {
                 printMetadata = 1;
+                #ifdef DEBUG
+                usb.print("printMetadata = 1\r");
+                #endif
                 bc127_command("AVRCP_META_DATA 11");
             }
 
@@ -289,7 +297,6 @@ void print_part(int start){
 #endif
 
 //takes a string and prints the first 11 characters to the display
-//TODO: need to fix timing / bus policy!
 void kbus_print(String message){
     int i = 0;
     int len = message.length();
@@ -315,10 +322,14 @@ void kbus_print(String message){
     while (clearToSend == 0) {
         //TODO remove this for production
         #ifdef DEBUG
-        if (tref > 1) //print this message every ms or so
+        byte tmp = 0
+        if (tref > 10) //print this message every 10 ms or so
         {
-            usb.print("waiting for kbus holdoff\r");
+            usb.print("waiting for kbus holdoff: ~");
+            usb.print(tmp);
+            usb.print(" ms\r");
             tref = 0;
+            tmp++;
         }
         #endif
     }
@@ -495,14 +506,14 @@ void read_and_parse_bc127_packet()
         }
         music_playing = 1;
         #ifdef DEBUG
-        usb.print("music playing\r");
+        usb.print("music_playing = 1\r");
         #endif
     }
     else if (bc127_buffer.startsWith("AVRCP_PAUSE 11") || bc127_buffer.startsWith("A2DP_STREAM_SUSPEND 10"))
     {
         music_playing = 0;
         #ifdef DEBUG
-        usb.print("music paused\r");
+        usb.print("music_playing = 0\r");
         #endif
     }
     else if (bc127_buffer.startsWith("AVRCP_MEDIA TITLE: "))
@@ -537,7 +548,9 @@ void read_and_parse_bc127_packet()
     {
         //automatically start music on powerup / connection
         bc127_command("MUSIC 11 PLAY");
-        display_timer.begin(print_buffer, 3000000);
+
+        //this probably shouldn't go here, it could be called twice. instead, always run it and just dont' print before music is playing
+        // display_timer.begin(print_buffer, 3000000);
     }
     bc127_buffer = "";
 }
