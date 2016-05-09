@@ -5,10 +5,11 @@
 #define PREV_PIN 7
 
 HardwareSerial & kbus = Serial1;
+// HardwareSerial & usb = Serial;
 
 byte kbus_data[32] = { 0 };
 
-String message = "adcurtin";
+// String message = "adcurtin";
 
 void setup(){
 
@@ -24,7 +25,7 @@ void setup(){
     pinMode(EN_PIN, OUTPUT);
     digitalWrite(EN_PIN, HIGH);
     kbus.begin(9600, SERIAL_8E1);
-    kbus_print(message);
+    // kbus_print(message);
 
 }
 
@@ -77,14 +78,14 @@ void parse_packet(){
             switch (kbus_data[4]) {
                 case 0x01: //next pressed
                     press(NEXT_PIN);
-                    Serial.println("next pressed");
+                    // usb.println("next pressed");
                     break;
                 case 0x11: //next held
                 case 0x21: //next released
                     break;
                 case 0x08: //previous pressed
                     press(PREV_PIN);
-                    Serial.println("previous pressed");
+                    // usb.println("previous pressed");
                     break;
                 case 0x18: //previous held
                 case 0x28: //previous released
@@ -103,10 +104,10 @@ void parse_packet(){
                 //if held, this is hold the play button, the press function will
                 //release it when the button is released.
                 digitalWrite(PLAY_PIN, HIGH);
-                Serial.println("play held");
+                // usb.println("play held");
             } else if(kbus_data[4] == 0xA0){ //released
                 press(PLAY_PIN);
-                Serial.println("play pressed");
+                // usb.println("play pressed");
             }
         }
     } else {
