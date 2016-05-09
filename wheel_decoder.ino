@@ -82,7 +82,6 @@ void setup(){
 
     // bc127.attachRts(11);
     bc127.clear();
-    // bc127_command("RESET");
     bc127.print("RESET\r");
 
     tref = 0;
@@ -319,20 +318,13 @@ void kbus_print(String message){
     int out_len = 2 + out_data[1]; //will always transmit right number of bytes
 
     //wait until it's clear to send the message
+    byte waited = 0;
+    tref = 0;
+    unsigned long wait_duration = 0;
     while (clearToSend == 0) {
-        //TODO remove this for production
-        #ifdef DEBUG
-        byte tmp = 0
-        if (tref > 10) //print this message every 10 ms or so
-        {
-            usb.print("waiting for kbus holdoff: ~");
-            usb.print(tmp);
-            usb.print(" ms\r");
-            tref = 0;
-            tmp++;
-        }
-        #endif
+        waited = 1; //just set this to true to keep this wait loop as short and uninterrupted as possible
     }
+    wait_duration = tref;
     if (clearToSend)
     {
         kbus.clear(); //there shouldn't be anything on new on the bus if we're clear to send
@@ -341,6 +333,15 @@ void kbus_print(String message){
     }
     // delay(2); //low priority messages, idle for 2ms after transmission
     #ifdef DEBUG
+    if (waited == 1) //print this message every 10 ms or so
+    {
+        usb.print("waited for kbus holdoff ~");
+        usb.print(wait_duration);
+        usb.print(" ms\r");
+        tref = 0;
+        waited = 0;
+    }
+
     // usb.print("kbus send data: ");
     // for(i=0;i<out_len;i++){
     //     usb.print(out_data[i], HEX);
@@ -352,6 +353,7 @@ void kbus_print(String message){
     usb.print(message.c_str());
     usb.print("\r");
     #endif
+
     return;
 }
 
@@ -367,7 +369,7 @@ void print_buffer()
     //buf_len = 9
     if (buf_i >= buf_len){
         buf_i = 0;
-        if(int_count >= 10){ //only get new data when done printing a message
+        if(int_count >= 10 && music_playing){ //only get new data when done printing a message
             // bc127.clear();
             bc127_command("AVRCP_META_DATA 11");
             int_count = 0;
@@ -459,8 +461,9 @@ byte bc127_command(const char message[])
             return 0;
     }
     if (bc127_buffer.startsWith("OK")) return 1;
-    bc127_buffer = "";
 
+    //should never get here
+    return 0;
 }
 
 void read_and_parse_bc127_packet()
