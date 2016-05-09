@@ -37,6 +37,7 @@ byte printMetadata = 1;
 
 volatile byte clearToSend = 1;
 IntervalTimer holdoffTimer, metaTimer;
+volatile byte getMetadata = 0;
 
 // LiquidCrystal lcd(18,17,16,15,14,13,12);
 
@@ -53,7 +54,8 @@ String album = "";
 String bc127_buffer = "";
 
 #define DISPLAY_BUFFER_SIZE 10
-String display_buffer[DISPLAY_BUFFER_SIZE] = { "" };
+char display_buffer[DISPLAY_BUFFER_SIZE][12];
+// String display_buffer[DISPLAY_BUFFER_SIZE] = { "" };
 volatile int buf_i = 0;
 volatile int buf_len = 0;
 volatile int int_count = 0;
@@ -124,6 +126,11 @@ void loop(){
         // }
         #endif
         parse_packet();
+    }
+
+    if (getMetadata){
+        bc127_command("AVRCP_META_DATA 11");
+        getMetadata = 0;
     }
 
     //read bc127
@@ -224,7 +231,8 @@ void parse_packet(){
                 #ifdef DEBUG
                 usb.print("printMetadata = 1\r");
                 #endif
-                bc127_command("AVRCP_META_DATA 11");
+                // bc127_command("AVRCP_META_DATA 11");// not in an interrupt
+                getMetadata = 1;
             }
 
         } else if(kbus_data[3] == 0x3B){ // phone button
@@ -296,9 +304,10 @@ void print_part(int start){
 #endif
 
 //takes a string and prints the first 11 characters to the display
-void kbus_print(String message){
+//runs in interrupt, don't use String!
+void kbus_print(const char message[]){
     int i = 0;
-    int len = message.length();
+    int len = strlen(message);
     if (len > 11) len = 11;
 
     byte out_data[20] = { 0 };
@@ -310,7 +319,7 @@ void kbus_print(String message){
     out_data[5] = 0x32;
 
     for(i=0;i<len;i++){
-        out_data[6+i] = message.charAt(i);
+        out_data[6+i] = message[i];
     }
 
     out_data[ 1 + out_data[1] ] = checksum(out_data, 2 + out_data[1]);
@@ -327,7 +336,7 @@ void kbus_print(String message){
     wait_duration = tref;
     if (clearToSend)
     {
-        kbus.clear(); //there shouldn't be anything on new on the bus if we're clear to send
+        // kbus.clear(); //there shouldn't be anything on new on the bus if we're clear to send
         kbus.write(out_data, out_len);
         //we should get this data right back
     }
@@ -350,7 +359,7 @@ void kbus_print(String message){
     // usb.print("\r");
 
     usb.print("kbus_print: ");
-    usb.print(message.c_str());
+    usb.print(message);
     usb.print("\r");
     #endif
 
@@ -358,6 +367,7 @@ void kbus_print(String message){
 }
 
 //print the next message in the buffer
+//runs in interrupt
 void print_buffer()
 {
     if (music_playing && printMetadata)
@@ -371,7 +381,8 @@ void print_buffer()
         buf_i = 0;
         if(int_count >= 10 && music_playing){ //only get new data when done printing a message
             // bc127.clear();
-            bc127_command("AVRCP_META_DATA 11");
+            // bc127_command("AVRCP_META_DATA 11");
+            getMetadata = 1;
             int_count = 0;
         }
     }
@@ -380,34 +391,39 @@ void print_buffer()
 }
 
 //reset true if we should empty the buffer and start over
+//does not run in interrupt, but updates stuff that is used there
 void update_display_buffer(String message, byte reset)
 {
+    noInterrupts();
     int i = 0;
     if (reset == 1 || buf_len > DISPLAY_BUFFER_SIZE)
     {
         buf_len = 0;
         buf_i = 0;
-        for (i = 0; i < 8; i++)
+        for (i = 0; i < DISPLAY_BUFFER_SIZE; i++)
         {
-            display_buffer[i] = "";
+            memset(display_buffer[i], 0, 12);
+            // display_buffer[i][0] = NULL; //null the first byte to end the strings
         }
     }
 
     if (message.length() > 55) message = message.substring(0,55); //limit each data to display cycles so whole message can be displayed
 
-    //"∫Andrew McM" "ahon In The" " Wilderness"
     while (message.length() > 11)
     {
-        //copy first 11 characters of message to display buffer (+ null byte?)
-        display_buffer[buf_len] = message.substring(0, 11);
+        //copy first 11 characters of message to display buffer
+        strncpy(display_buffer[buf_len], message.c_str(),  11);
+        // display_buffer[buf_len] = message.substring(0, 11);
         buf_len++;
         //remove first 11 chars from message (0 indexed)
         message = message.substring(11, message.length());
     }
 
     //message is now 11 or less characters. copy whole message to buffer
-    display_buffer[buf_len] = message.substring(0, message.length());
+    strncpy(display_buffer[buf_len], message.c_str(), message.length());
+    // display_buffer[buf_len] = message;
     buf_len++;
+    interrupts();
     return;
 }
 
@@ -558,6 +574,7 @@ void read_and_parse_bc127_packet()
     bc127_buffer = "";
 }
 
+//runs in interrupt
 void startHoldoff()
 {
     // if clear to send is false, already in holdoff period
@@ -569,6 +586,7 @@ void startHoldoff()
     }
 }
 
+//runs in interrupt
 void endHoldoff()
 {
     clearToSend = 1;
@@ -576,11 +594,13 @@ void endHoldoff()
     // usb.print("end holdoff. cts = 1\r");
 }
 
+//runs in interrupt
 void metadata_request()
 {
     metaTimer.end(); //single shot
     #ifdef DEBUG
     usb.print("meta request timer\r");
     #endif
-    bc127_command("AVRCP_META_DATA 11");
+    // bc127_command("AVRCP_META_DATA 11");
+    getMetadata = 1;
 }
