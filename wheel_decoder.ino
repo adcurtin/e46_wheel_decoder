@@ -5,6 +5,7 @@
 
 // #define SERIAL_RX_BUFFER_SIZE 256 //for leonardo
 
+#define NEWLINE_CHAR "\n"
 
 #define DEBUG 1
 
@@ -29,7 +30,9 @@ HardwareSerial & bc127 = Serial2;
 
 byte music_playing = 0;
 
-byte kbus_data[32] = { 0 };
+byte kbus_data[257] = { 0 }; //can be 0xFF + 2 long max
+//on the teensy 3, we can afford the extra ram
+//so the complexity of coding more bounds checking can be saved :)
 
 IntervalTimer display_timer;
 
@@ -79,7 +82,7 @@ void setup(){
     usb.print("[2J"); // clear screen
     usb.write(27); // ESC
     usb.print("[H"); // cursor to home
-    usb.print("started\r");
+    usb.print("started\r" NEWLINE_CHAR);
     #endif
 
     // bc127.attachRts(11);
@@ -163,7 +166,7 @@ int read_kbus_packet(){
     }
     if(kbus_timeout >= 500){
         #ifdef DEBUG
-        usb.print("kbus timeout!\r");
+        usb.print("kbus timeout!\r" NEWLINE_CHAR);
         #endif
         kbus.clear(); //we might've gotten out of sync. throw everything away, hopefully not in the middle of a packet
     }
@@ -174,13 +177,13 @@ int read_kbus_packet(){
     if(kbus_data[1 + kbus_data[1]] != crc){
         kbus.clear(); //we might've gotten out of sync. throw everything away, hopefully not in the middle of a packet
         #ifdef DEBUG
-        usb.print("-------------------------\r");
+        usb.print("-------------------------\r" NEWLINE_CHAR);
         usb.print("Checksum mismatch! expected: ");
         usb.print(crc, HEX);
         usb.print(" got: ");
         usb.println(kbus_data[1 + kbus_data[1]], HEX);
         print_packet();
-        usb.print("-------------------------x\r");
+        usb.print("-------------------------x\r" NEWLINE_CHAR);
         #endif
         return 0; //no valid bytes read. can't really handle errors.
     }
@@ -222,14 +225,14 @@ void parse_packet(){
             if(printMetadata){
                 printMetadata = 0;
                 #ifdef DEBUG
-                usb.print("printMetadata = 0\r");
+                usb.print("printMetadata = 0\r" NEWLINE_CHAR);
                 #endif
             }
             else
             {
                 printMetadata = 1;
                 #ifdef DEBUG
-                usb.print("printMetadata = 1\r");
+                usb.print("printMetadata = 1\r" NEWLINE_CHAR);
                 #endif
                 // bc127_command("AVRCP_META_DATA 11");// not in an interrupt
                 getMetadata = 1;
@@ -291,7 +294,7 @@ void print_packet(){
         usb.print(kbus_data[i], HEX);
         usb.print(".");
     }
-    usb.print("\r");
+    usb.print("\r" NEWLINE_CHAR);
 }
 
 void print_part(int start){
@@ -299,7 +302,7 @@ void print_part(int start){
         usb.print(kbus_data[i], HEX);
         usb.print(":");
     }
-    usb.print("\r");
+    usb.print("\r" NEWLINE_CHAR);
 }
 #endif
 
@@ -346,7 +349,7 @@ void kbus_print(const char message[]){
     {
         usb.print("waited for kbus holdoff ~");
         usb.print(wait_duration);
-        usb.print(" ms\r");
+        usb.print(" ms\r" NEWLINE_CHAR);
         tref = 0;
         waited = 0;
     }
@@ -356,11 +359,11 @@ void kbus_print(const char message[]){
     //     usb.print(out_data[i], HEX);
     //     usb.print(":");
     // }
-    // usb.print("\r");
+    // usb.print("\r" NEWLINE_CHAR);
 
     usb.print("kbus_print: ");
     usb.print(message);
-    usb.print("\r");
+    usb.print("\r" NEWLINE_CHAR);
     #endif
 
     return;
@@ -435,7 +438,7 @@ byte bc127_command(const char message[])
     #ifdef DEBUG
     usb.print("bc127 command: ");
     usb.print(message);
-    usb.print("\r");
+    usb.print("\r" NEWLINE_CHAR);
     #endif
     bc127.print(message);
     bc127.print("\r");
@@ -453,13 +456,14 @@ byte bc127_command(const char message[])
         if (bc127_timeout > 2000) //timeout after 200ms
         {
             #ifdef DEBUG
-            usb.print("timeout reading bc127 command response!\r");
+            usb.print("timeout reading bc127 command response!\r" NEWLINE_CHAR);
             usb.print("read: \'");
             usb.print(bc127_buffer.c_str());
-            usb.print("\r");
+            usb.print("\r" NEWLINE_CHAR);
             #endif
             bc127_buffer = "";
             bc127_timeout = 0;
+            break; //out of while loop
         }
     }
     //finished reading a line: bc127_buffer ends with \r
@@ -467,12 +471,13 @@ byte bc127_command(const char message[])
     #ifdef DEBUG
     usb.print("bc127 rx response: ");
     usb.print(bc127_buffer);
+    usb.print(NEWLINE_CHAR);
     #endif
     //interpret data
     if (bc127_buffer.startsWith("ER"))
     {
             #ifdef DEBUG
-            usb.print("bc127 command error\r");
+            usb.print("bc127 command error\r" NEWLINE_CHAR);
             #endif
             return 0;
     }
@@ -500,10 +505,10 @@ void read_and_parse_bc127_packet()
             #ifdef DEBUG
             usb.print("read: \'");
             usb.print(bc127_buffer.c_str());
-            usb.print("\'\r");
+            usb.print("\'\r" NEWLINE_CHAR);
             usb.print("timeout reading bc127 packet: ");
             usb.print(bc127_timeout);
-            usb.print("\r");
+            usb.print("\r" NEWLINE_CHAR);
             #endif
             bc127_buffer = "";
             bc127_timeout = 0;
@@ -515,9 +520,12 @@ void read_and_parse_bc127_packet()
     #ifdef DEBUG
     usb.print("bc127 rx: ");
     usb.print(bc127_buffer);
+    usb.print(NEWLINE_CHAR);
     #endif
     //interpret data
-    if (bc127_buffer.startsWith("AVRCP_PLAY 11") || bc127_buffer.startsWith("A2DP_STREAM_START 10"))
+    if (bc127_buffer.startsWith("AVRCP_PLAY 11") ||
+        bc127_buffer.startsWith("A2DP_STREAM_START 10")
+       )
     {
         if(!music_playing)
         {
@@ -525,14 +533,18 @@ void read_and_parse_bc127_packet()
         }
         music_playing = 1;
         #ifdef DEBUG
-        usb.print("music_playing = 1\r");
+        usb.print("music_playing = 1\r" NEWLINE_CHAR);
         #endif
     }
-    else if (bc127_buffer.startsWith("AVRCP_PAUSE 11") || bc127_buffer.startsWith("A2DP_STREAM_SUSPEND 10"))
+    else if (bc127_buffer.startsWith("AVRCP_PAUSE 11") ||
+             bc127_buffer.startsWith("A2DP_STREAM_SUSPEND 10") ||
+             bc127_buffer.startsWith("CLOSE_OK 11 AVRCP") ||
+             bc127_buffer.startsWith("LINK_LOSS 10 1")
+            )
     {
         music_playing = 0;
         #ifdef DEBUG
-        usb.print("music_playing = 0\r");
+        usb.print("music_playing = 0\r" NEWLINE_CHAR);
         #endif
     }
     else if (bc127_buffer.startsWith("AVRCP_MEDIA TITLE: "))
@@ -557,7 +569,7 @@ void read_and_parse_bc127_packet()
             oldTitle = title;
             oldArtist = artist;
             #ifdef DEBUG
-            // usb.print("metadata changed. updated display and copied new to old\r");
+            // usb.print("metadata changed. updated display and copied new to old\r" NEWLINE_CHAR);
             #endif
         }
         //we've finished reading in the metadata we care about, print the buffer
@@ -582,7 +594,7 @@ void startHoldoff()
         clearToSend = 0;
         holdoffTimer.begin(endHoldoff, 2000);
         holdoffTimer.priority(64);
-        // usb.print("start holdoff. cts = 0\r");
+        // usb.print("start holdoff. cts = 0\r" NEWLINE_CHAR);
     }
 }
 
@@ -591,7 +603,7 @@ void endHoldoff()
 {
     clearToSend = 1;
     holdoffTimer.end(); //just a one shot timer
-    // usb.print("end holdoff. cts = 1\r");
+    // usb.print("end holdoff. cts = 1\r" NEWLINE_CHAR);
 }
 
 //runs in interrupt
@@ -599,7 +611,7 @@ void metadata_request()
 {
     metaTimer.end(); //single shot
     #ifdef DEBUG
-    usb.print("meta request timer\r");
+    usb.print("meta request timer\r" NEWLINE_CHAR);
     #endif
     // bc127_command("AVRCP_META_DATA 11");
     getMetadata = 1;
