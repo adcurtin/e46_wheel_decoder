@@ -1,10 +1,4 @@
-// #include <LiquidCrystal.h>
-// #include <SoftwareSerial.h>
-// #include <TimerThree.h>
-
-
-// #define SERIAL_RX_BUFFER_SIZE 256 //for leonardo
-#define VERSION 0.1
+#define VERSION "0.1"
 
 #define NEWLINE_CHAR "\n"
 
@@ -12,7 +6,8 @@
 
 #define LED_PIN 13
 
-#define EN_PIN 2
+#define EN_PIN 2 //for kline transciever
+
 //portability, can easily change serial ports globally
 HardwareSerial & kbus = Serial1;
 
