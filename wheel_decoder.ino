@@ -4,6 +4,7 @@
 
 
 // #define SERIAL_RX_BUFFER_SIZE 256 //for leonardo
+#define VERSION 0.1
 
 #define NEWLINE_CHAR "\n"
 
@@ -82,7 +83,7 @@ void setup(){
     usb.print("[2J"); // clear screen
     usb.write(27); // ESC
     usb.print("[H"); // cursor to home
-    usb.print("started\r" NEWLINE_CHAR);
+    usb.print("started" VERSION "\r" NEWLINE_CHAR);
     #endif
 
     // bc127.attachRts(11);
