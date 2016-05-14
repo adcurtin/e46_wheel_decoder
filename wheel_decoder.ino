@@ -1,4 +1,4 @@
-#define VERSION "0.1"
+#define VERSION "0.1.1"
 
 #define NEWLINE_CHAR "\n"
 
@@ -22,7 +22,8 @@ usb_serial_class & usb = Serial; //teensy 2 and 3
 //leonardo supports RX: 8, 9, 10, 11, 14 (MISO), 15 (SCK), 16 (MOSI).
 // SoftwareSerial bc127(8, 9); // RX, TX leonardo
 //teensy 3 serial2 is pins rx:9 and tx:10
-HardwareSerial & bc127 = Serial2;
+//teensy 3 serial3 is pins rx:7 and tx:8
+HardwareSerial & bc127 = Serial3;
 
 byte music_playing = 0;
 
