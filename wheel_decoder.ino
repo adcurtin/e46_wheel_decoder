@@ -1,4 +1,9 @@
-#define VERSION "0.1"
+#include <SPI.h>
+#include <SdFat.h>
+
+const uint8_t chipSelect = 10;
+
+#define VERSION "0.2"
 
 #define NEWLINE_CHAR "\n"
 
@@ -22,7 +27,8 @@ usb_serial_class & usb = Serial; //teensy 2 and 3
 //leonardo supports RX: 8, 9, 10, 11, 14 (MISO), 15 (SCK), 16 (MOSI).
 // SoftwareSerial bc127(8, 9); // RX, TX leonardo
 //teensy 3 serial2 is pins rx:9 and tx:10
-HardwareSerial & bc127 = Serial2;
+//teensy 3 serial3 is pins rx:7 and tx:8
+HardwareSerial & bc127 = Serial3;
 
 byte music_playing = 0;
 
@@ -78,7 +84,7 @@ void setup(){
     usb.print("[2J"); // clear screen
     usb.write(27); // ESC
     usb.print("[H"); // cursor to home
-    usb.print("started" VERSION "\r" NEWLINE_CHAR);
+    usb.print("started " VERSION "\r" NEWLINE_CHAR);
     #endif
 
     // bc127.attachRts(11);
