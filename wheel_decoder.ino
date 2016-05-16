@@ -359,6 +359,9 @@ void parse_packet(){
                 //the normal read will catch the source's response of AVRCP_PLAY/AVRCP_PAUSE and update music_playing
             } else if(kbus_data[4] == 0x90){ //held
                 #ifdef DEBUG
+                # ifdef TIMESTAMPS
+                printTime();
+                # endif
                 //leave a breadcrumb in the log. It should be uncommon that I hold the phone button.
                 logfile.print(F("breadcrumb\r" NEWLINE_CHAR));
                 #endif
