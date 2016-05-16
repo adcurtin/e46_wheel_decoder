@@ -364,6 +364,7 @@ void parse_packet(){
                 # endif
                 //leave a breadcrumb in the log. It should be uncommon that I hold the phone button.
                 logfile.print(F("breadcrumb\r" NEWLINE_CHAR));
+                kbus_print("breadcrumb");
                 #endif
             } else if(kbus_data[4] == 0xA0){ //released
             }
