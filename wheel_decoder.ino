@@ -263,9 +263,9 @@ int read_kbus_packet(){
     }
     if(kbus_timeout >= 500){
         #ifdef DEBUG
-        #ifdef TIMESTAMPS
+        # ifdef TIMESTAMPS
         printTime();
-        #endif
+        # endif
         logfile.print(F("kbus timeout!\r" NEWLINE_CHAR));
         #endif
         kbus.clear(); //we might've gotten out of sync. throw everything away, hopefully not in the middle of a packet
@@ -278,9 +278,9 @@ int read_kbus_packet(){
         kbus.clear(); //we might've gotten out of sync. throw everything away, hopefully not in the middle of a packet
         #ifdef DEBUG
         logfile.print(F("-------------------------\r" NEWLINE_CHAR));
-        #ifdef TIMESTAMPS
+        # ifdef TIMESTAMPS
         printTime();
-        #endif
+        # endif
         logfile.print(F("Checksum mismatch! expected: "));
         logfile.print(crc, HEX);
         logfile.print(F(" got: "));
@@ -328,9 +328,9 @@ void parse_packet(){
             if(printMetadata){
                 printMetadata = 0;
                 #ifdef DEBUG
-                #ifdef TIMESTAMPS
+                # ifdef TIMESTAMPS
                 printTime();
-                #endif
+                # endif
                 logfile.print(F("printMetadata = 0\r" NEWLINE_CHAR));
                 #endif
             }
@@ -338,9 +338,9 @@ void parse_packet(){
             {
                 printMetadata = 1;
                 #ifdef DEBUG
-                #ifdef TIMESTAMPS
+                # ifdef TIMESTAMPS
                 printTime();
-                #endif
+                # endif
                 logfile.print(F("printMetadata = 1\r" NEWLINE_CHAR));
                 #endif
                 // bc127_command("AVRCP_META_DATA 11");// not in an interrupt
@@ -358,6 +358,10 @@ void parse_packet(){
                 }
                 //the normal read will catch the source's response of AVRCP_PLAY/AVRCP_PAUSE and update music_playing
             } else if(kbus_data[4] == 0x90){ //held
+                #ifdef DEBUG
+                //leave a breadcrumb in the log. It should be uncommon that I hold the phone button.
+                logfile.print(F("breadcrumb\r" NEWLINE_CHAR));
+                #endif
             } else if(kbus_data[4] == 0xA0){ //released
             }
         }
