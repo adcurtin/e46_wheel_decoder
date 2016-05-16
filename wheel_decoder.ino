@@ -2,15 +2,13 @@
 #include <SdFat.h>
 #include <TimeLib.h>
 
-const uint8_t chipSelect = 10;
-
 #define VERSION "0.2"
 
 #define NEWLINE_CHAR "\n"
 
 #define DEBUG 1
 #define TIMESTAMPS 1
-// #define SDLOG 1
+#define SDLOG 1
 
 #define LED_PIN 13
 
@@ -19,10 +17,16 @@ const uint8_t chipSelect = 10;
 //portability, can easily change serial ports globally
 HardwareSerial & kbus = Serial1;
 
-#ifdef SDLOG
-usb = sdcard; //FIXME
-#else
-usb_serial_class & usb = Serial; //teensy 3
+#ifdef DEBUG
+# ifdef SDLOG
+const uint8_t chipSelect = 10;
+SdFat sd;
+SdFile logfile;
+// Error messages stored in flash.
+#define error(msg) sd.errorHalt(F(msg))
+# else
+usb_serial_class & logfile = Serial; //teensy 3
+# endif
 #endif
 
 
@@ -36,6 +40,8 @@ usb_serial_class & usb = Serial; //teensy 3
 //teensy 3 serial2 is pins rx:9 and tx:10
 //teensy 3 serial3 is pins rx:7 and tx:8
 HardwareSerial & bc127 = Serial3;
+//make sure in increase serila buffer size to catch startup!
+//./hardware/teensy/avr/cores/teensy3/serial3.c
 
 byte music_playing = 0;
 
@@ -84,29 +90,95 @@ void setup(){
     pinMode(1, INPUT_PULLUP);
 
     bc127.begin(57600);
+    // bc127.attachRts(11);
+    bc127.clear();
+    bc127.print("RESET\r");
+
 
     #ifdef DEBUG
-    usb.begin(57600);
+    # ifdef SDLOG
+    //open new file on sdcard
+    // Initialize the SD card at SPI_HALF_SPEED to avoid bus errors with long wires.
+    // use SPI_FULL_SPEED for better performance.
+    if (!sd.begin(chipSelect, SPI_HALF_SPEED)) {
+        sd.initErrorHalt();
+    }
+
+    #  ifdef TIMESTAMPS
+    String filename = F("radio-");
+    int i;
+    filename += year();
+    filename += "-";
+    i = month();
+    if (i < 10) filename += "0";
+    filename += i;
+    filename += "-";
+    i = day();
+    if (i < 10) filename += "0";
+    filename += i;
+    filename += "_";
+    i = hour();
+    if (i < 10) filename += "0";
+    filename += i;
+    filename += "-";
+    i = minute();
+    if (i < 10) filename += "0";
+    filename += i;
+    filename += "-";
+    i = second();
+    if (i < 10) filename += "0";
+    filename += i;
+    filename += ".log";
+    if (sd.exists(filename.c_str())){
+        error("Can't create file name: file exists!");
+    }
+    if (!logfile.open(filename.c_str(), O_CREAT | O_WRITE | O_EXCL)) {
+          error("file.open failed");
+    }
+    //set files creation / modified dates
+    logfile.timestamp(T_CREATE | T_WRITE, year(), month(), day(), hour(), minute(), second());
+    #  else /* TIMESTAMPS */
+    char filename[] = "radio-notime-000.log";
+    while (sd.exists(filename)) {
+        if (filename[15] != '9') {
+            filename[15]++;
+        } else if (filename[14] != '9') {
+            filename[15] = '0';
+            filename[14]++;
+        } else if (filename[13] != '9') {
+            filename[15] = '0';
+            filename[14] = '0';
+            filename[13]++;
+        } else {
+            error("Can't create file name: too many files!");
+        }
+    }
+    if (!logfile.open(filename, O_CREAT | O_WRITE | O_EXCL)) {
+          error("file.open failed");
+    }
+    logfile.timestamp(T_CREATE | T_WRITE, 2016, 5, 16, 0, 0, 0);
+    #  endif /* TIMESTAMPS */
+
+    Serial.begin(57600); //for errors
+    # else /* SDLOG */
+    logfile.begin(57600);
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, HIGH);
     delay(5000);
     digitalWrite(LED_PIN, LOW);
-    usb.write(27);
-    usb.print("[2J"); // clear screen
-    usb.write(27); // ESC
-    usb.print("[H"); // cursor to home
+    logfile.write(27);
+    logfile.print(F("[2J")); // clear screen
+    logfile.write(27); // ESC
+    logfile.print(F("[H")); // cursor to home
+    # endif /* SDLOG */
     #ifdef TIMESTAMPS
     if (timeStatus()!= timeSet) {
-        usb.print("Unable to sync with the internal RTC!\r" NEWLINE_CHAR);
+        logfile.print(F("Unable to sync with the internal RTC!\r" NEWLINE_CHAR));
     }
     printTime();
     #endif
-    usb.print("started " VERSION "\r" NEWLINE_CHAR);
+    logfile.print(F("started " VERSION " compiled: " __DATE__ " " __TIME__ "\r" NEWLINE_CHAR));
     #endif
-
-    // bc127.attachRts(11);
-    bc127.clear();
-    bc127.print("RESET\r");
 
     tref = 0;
 
@@ -120,7 +192,7 @@ void setup(){
     // lcd.print("           xxxxxxxxx");
 
 
-    delay(1000);
+    // delay(1000);
 
     pinMode(EN_PIN, OUTPUT);
     digitalWrite(EN_PIN, HIGH);
@@ -143,7 +215,7 @@ void loop(){
     if(bytes_read > 0){
         #ifdef DEBUG
         // if(kbus_data[2] == 0x68 || kbus_data[2] == 0xC8) {
-            // usb.println("recd packet to radio or phone");
+            // logfile.println("recd packet to radio or phone");
             // print_packet();
         // }
         #endif
@@ -157,6 +229,12 @@ void loop(){
 
     //read bc127
     read_and_parse_bc127_packet();
+
+    #ifdef SDLOG
+    if (!logfile.sync() || logfile.getWriteError()) {
+        error("write error");
+    }
+    #endif
 }
 
 /* check kbus for data. if any available, block until whole packet is read.
@@ -188,7 +266,7 @@ int read_kbus_packet(){
         #ifdef TIMESTAMPS
         printTime();
         #endif
-        usb.print("kbus timeout!\r" NEWLINE_CHAR);
+        logfile.print(F("kbus timeout!\r" NEWLINE_CHAR));
         #endif
         kbus.clear(); //we might've gotten out of sync. throw everything away, hopefully not in the middle of a packet
     }
@@ -199,16 +277,16 @@ int read_kbus_packet(){
     if(kbus_data[1 + kbus_data[1]] != crc){
         kbus.clear(); //we might've gotten out of sync. throw everything away, hopefully not in the middle of a packet
         #ifdef DEBUG
-        usb.print("-------------------------\r" NEWLINE_CHAR);
+        logfile.print(F("-------------------------\r" NEWLINE_CHAR));
         #ifdef TIMESTAMPS
         printTime();
         #endif
-        usb.print("Checksum mismatch! expected: ");
-        usb.print(crc, HEX);
-        usb.print(" got: ");
-        usb.println(kbus_data[1 + kbus_data[1]], HEX);
+        logfile.print(F("Checksum mismatch! expected: "));
+        logfile.print(crc, HEX);
+        logfile.print(F(" got: "));
+        logfile.println(kbus_data[1 + kbus_data[1]], HEX);
         print_packet();
-        usb.print("-------------------------x\r" NEWLINE_CHAR);
+        logfile.print(F("-------------------------x\r" NEWLINE_CHAR));
         #endif
         return 0; //no valid bytes read. can't really handle errors.
     }
@@ -253,7 +331,7 @@ void parse_packet(){
                 #ifdef TIMESTAMPS
                 printTime();
                 #endif
-                usb.print("printMetadata = 0\r" NEWLINE_CHAR);
+                logfile.print(F("printMetadata = 0\r" NEWLINE_CHAR));
                 #endif
             }
             else
@@ -263,7 +341,7 @@ void parse_packet(){
                 #ifdef TIMESTAMPS
                 printTime();
                 #endif
-                usb.print("printMetadata = 1\r" NEWLINE_CHAR);
+                logfile.print(F("printMetadata = 1\r" NEWLINE_CHAR));
                 #endif
                 // bc127_command("AVRCP_META_DATA 11");// not in an interrupt
                 getMetadata = 1;
@@ -323,12 +401,12 @@ void print_packet(){
     #ifdef TIMESTAMPS
     printTime();
     #endif
-    usb.print("recieved kbus packet: ");
+    logfile.print(F("recieved kbus packet: "));
     for(int i = 0; i < (2+kbus_data[1]); i++){
-        usb.print(kbus_data[i], HEX);
-        usb.print(".");
+        logfile.print(kbus_data[i], HEX);
+        logfile.print(F("."));
     }
-    usb.print("\r" NEWLINE_CHAR);
+    logfile.print(F("\r" NEWLINE_CHAR));
 }
 
 void print_part(int start){
@@ -336,10 +414,10 @@ void print_part(int start){
     printTime();
     #endif
     for(int i = start; i < (2+kbus_data[1]); i++){
-        usb.print(kbus_data[i], HEX);
-        usb.print(":");
+        logfile.print(kbus_data[i], HEX);
+        logfile.print(F(":"));
     }
-    usb.print("\r" NEWLINE_CHAR);
+    logfile.print(F("\r" NEWLINE_CHAR));
 }
 #endif
 
@@ -387,26 +465,26 @@ void kbus_print(const char message[]){
         # ifdef TIMESTAMPS
         printTime();
         # endif
-        usb.print("waited for kbus holdoff ~");
-        usb.print(wait_duration);
-        usb.print(" ms\r" NEWLINE_CHAR);
+        logfile.print(F("waited for kbus holdoff ~"));
+        logfile.print(wait_duration);
+        logfile.print(F(" ms\r" NEWLINE_CHAR));
         tref = 0;
         waited = 0;
     }
 
-    // usb.print("kbus send data: ");
+    // logfile.print("kbus send data: ");
     // for(i=0;i<out_len;i++){
-    //     usb.print(out_data[i], HEX);
-    //     usb.print(":");
+    //     logfile.print(out_data[i], HEX);
+    //     logfile.print(":");
     // }
-    // usb.print("\r" NEWLINE_CHAR);
+    // logfile.print("\r" NEWLINE_CHAR);
 
     # ifdef TIMESTAMPS
     printTime();
     # endif
-    usb.print("kbus_print: ");
-    usb.print(message);
-    usb.print("\r" NEWLINE_CHAR);
+    logfile.print(F("kbus_print: "));
+    logfile.print(message);
+    logfile.print(F("\r" NEWLINE_CHAR));
     #endif
 
     return;
@@ -482,9 +560,9 @@ byte bc127_command(const char message[])
     #ifdef TIMESTAMPS
     printTime();
     #endif
-    usb.print("bc127 command: ");
-    usb.print(message);
-    usb.print("\r" NEWLINE_CHAR);
+    logfile.print(F("bc127 command: "));
+    logfile.print(message);
+    logfile.print(F("\r" NEWLINE_CHAR));
     #endif
     bc127.print(message);
     bc127.print("\r");
@@ -497,7 +575,7 @@ byte bc127_command(const char message[])
         {
             char tmp = bc127.read();
             bc127_buffer += (char) tmp; //bc127.read();
-            // usb.print(tmp);
+            // logfile.print(tmp);
         }
         if (bc127_timeout > 2000) //timeout after 200ms
         {
@@ -505,10 +583,10 @@ byte bc127_command(const char message[])
             #ifdef TIMESTAMPS
             printTime();
             #endif
-            usb.print("timeout reading bc127 command response!\r" NEWLINE_CHAR);
-            usb.print("read: \'");
-            usb.print(bc127_buffer.c_str());
-            usb.print("\r" NEWLINE_CHAR);
+            logfile.print(F("timeout reading bc127 command response!\r" NEWLINE_CHAR));
+            logfile.print(F("read: \'"));
+            logfile.print(bc127_buffer.c_str());
+            logfile.print(F("\r" NEWLINE_CHAR));
             #endif
             bc127_buffer = "";
             bc127_timeout = 0;
@@ -521,9 +599,9 @@ byte bc127_command(const char message[])
     #ifdef TIMESTAMPS
     printTime();
     #endif
-    usb.print("bc127 rx response: ");
-    usb.print(bc127_buffer);
-    usb.print(NEWLINE_CHAR);
+    logfile.print(F("bc127 rx response: "));
+    logfile.print(bc127_buffer);
+    logfile.print(F(NEWLINE_CHAR));
     #endif
     //interpret data
     if (bc127_buffer.startsWith("ER"))
@@ -532,7 +610,7 @@ byte bc127_command(const char message[])
             #ifdef TIMESTAMPS
             printTime();
             #endif
-            usb.print("bc127 command error\r" NEWLINE_CHAR);
+            logfile.print(F("bc127 command error\r" NEWLINE_CHAR));
             #endif
             return 0;
     }
@@ -553,7 +631,7 @@ void read_and_parse_bc127_packet()
         {
             char tmp = bc127.read();
             bc127_buffer += (char) tmp; //bc127.read();
-            // usb.print(tmp);
+            // logfile.print(tmp);
         }
         if (bc127_timeout > 3000) //timeout after 200ms
         {
@@ -561,12 +639,12 @@ void read_and_parse_bc127_packet()
             #ifdef TIMESTAMPS
             printTime();
             #endif
-            usb.print("read: \'");
-            usb.print(bc127_buffer.c_str());
-            usb.print("\'\r" NEWLINE_CHAR);
-            usb.print("timeout reading bc127 packet: ");
-            usb.print(bc127_timeout);
-            usb.print("\r" NEWLINE_CHAR);
+            logfile.print(F("read: \'"));
+            logfile.print(bc127_buffer.c_str());
+            logfile.print(F("\'\r" NEWLINE_CHAR));
+            logfile.print(F("timeout reading bc127 packet: "));
+            logfile.print(bc127_timeout);
+            logfile.print(F("\r" NEWLINE_CHAR));
             #endif
             bc127_buffer = "";
             bc127_timeout = 0;
@@ -579,9 +657,9 @@ void read_and_parse_bc127_packet()
     #ifdef TIMESTAMPS
     printTime();
     #endif
-    usb.print("bc127 rx: ");
-    usb.print(bc127_buffer);
-    usb.print(NEWLINE_CHAR);
+    logfile.print(F("bc127 rx: "));
+    logfile.print(bc127_buffer);
+    logfile.print(F(NEWLINE_CHAR));
     #endif
     //interpret data
     if (bc127_buffer.startsWith("AVRCP_PLAY 11") ||
@@ -597,7 +675,7 @@ void read_and_parse_bc127_packet()
         #ifdef TIMESTAMPS
         printTime();
         #endif
-        usb.print("music_playing = 1\r" NEWLINE_CHAR);
+        logfile.print(F("music_playing = 1\r" NEWLINE_CHAR));
         #endif
     }
     else if (bc127_buffer.startsWith("AVRCP_PAUSE 11") ||
@@ -611,7 +689,7 @@ void read_and_parse_bc127_packet()
         #ifdef TIMESTAMPS
         printTime();
         #endif
-        usb.print("music_playing = 0\r" NEWLINE_CHAR);
+        logfile.print(F("music_playing = 0\r" NEWLINE_CHAR));
         #endif
     }
     else if (bc127_buffer.startsWith("AVRCP_MEDIA TITLE: "))
@@ -636,7 +714,7 @@ void read_and_parse_bc127_packet()
             oldTitle = title;
             oldArtist = artist;
             #ifdef DEBUG
-            // usb.print("metadata changed. updated display and copied new to old\r" NEWLINE_CHAR);
+            // logfile.print("metadata changed. updated display and copied new to old\r" NEWLINE_CHAR);
             #endif
         }
         //we've finished reading in the metadata we care about, print the buffer
@@ -661,7 +739,7 @@ void startHoldoff()
         clearToSend = 0;
         holdoffTimer.begin(endHoldoff, 2000);
         holdoffTimer.priority(64);
-        // usb.print("start holdoff. cts = 0\r" NEWLINE_CHAR);
+        // logfile.print("start holdoff. cts = 0\r" NEWLINE_CHAR);
     }
 }
 
@@ -670,7 +748,7 @@ void endHoldoff()
 {
     clearToSend = 1;
     holdoffTimer.end(); //just a one shot timer
-    // usb.print("end holdoff. cts = 1\r" NEWLINE_CHAR);
+    // logfile.print("end holdoff. cts = 1\r" NEWLINE_CHAR);
 }
 
 //runs in interrupt
@@ -681,7 +759,7 @@ void metadata_request()
     #ifdef TIMESTAMPS
     printTime();
     #endif
-    usb.print("meta request timer\r" NEWLINE_CHAR);
+    logfile.print(F("meta request timer\r" NEWLINE_CHAR));
     #endif
     // bc127_command("AVRCP_META_DATA 11");
     getMetadata = 1;
@@ -695,26 +773,33 @@ time_t getTeensy3Time()
 
 void printTime(){
     int i;
-    usb.print("[");
-    usb.print(year());
-    usb.print("-");
-    usb.print(month());
-    usb.print("-");
-    usb.print(day());
-    usb.print(" ");
+    logfile.print(F("["));
+    logfile.print(year());
+    logfile.print(F("-"));
+    i = month();
+    if (i < 10) logfile.print(F("0"));
+    logfile.print(i);
+    logfile.print(F("-"));
+    i = day();
+    if (i < 10) logfile.print(F("0"));
+    logfile.print(i);
+    logfile.print(F(" "));
     i = hour();
-    if (i < 10) usb.print("0");
-    usb.print(i);
-    usb.print(":");
+    if (i < 10) logfile.print(F("0"));
+    logfile.print(i);
+    logfile.print(F(":"));
     i = minute();
-    if (i < 10) usb.print("0");
-    usb.print(i);
-    usb.print(":");
+    if (i < 10) logfile.print(F("0"));
+    logfile.print(i);
+    logfile.print(F(":"));
     i = second();
-    if (i < 10) usb.print("0");
-    usb.print(i);
-    usb.print(".");
-    usb.print(millis() % 1000);
-    usb.print("] ");
+    if (i < 10) logfile.print(F("0"));
+    logfile.print(i);
+    logfile.print(F("."));
+    //stuff to get the last 3 digits of millis, including any leading zeros. probably better than % 1000 and other work for leading 0s
+    String ms = millis();
+    i = ms.length();
+    logfile.print(ms.substring(i-3,i));
+    logfile.print(F("] "));
 }
 #endif
