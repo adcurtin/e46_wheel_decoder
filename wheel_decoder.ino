@@ -19,7 +19,7 @@ HardwareSerial & kbus = Serial1;
 
 #ifdef DEBUG
 # ifdef SDLOG
-const uint8_t chipSelect = 10;
+const uint8_t chipSelect = 15;
 SdFat sd;
 SdFile logfile;
 // Error messages stored in flash.
@@ -93,6 +93,17 @@ void setup(){
     // bc127.attachRts(11);
     bc127.clear();
     bc127.print("RESET\r");
+
+    //kbus holdoff interrupt
+    pinMode(3, INPUT_PULLUP); // other pin has the pullup.
+    attachInterrupt(digitalPinToInterrupt(3), startHoldoff, FALLING);
+
+    pinMode(EN_PIN, OUTPUT);
+    digitalWrite(EN_PIN, HIGH);
+
+    kbus.begin(9600, SERIAL_8E1); //for leonardo and teensy 3
+    // UCSR1C = 0x26; // manually set register to SERIAL_8E1 for teensy 2 (leonardo too)
+    // kbus.begin(9600);
 
 
     #ifdef DEBUG
@@ -182,24 +193,8 @@ void setup(){
 
     tref = 0;
 
-    //kbus holdoff
-    pinMode(3, INPUT_PULLUP); // other pin has the pullup.
-    attachInterrupt(digitalPinToInterrupt(3), startHoldoff, FALLING);
-
-
-    // lcd.begin(20, 2);
-    // lcd.setCursor(0,1);
-    // lcd.print("           xxxxxxxxx");
-
-
     // delay(1000);
 
-    pinMode(EN_PIN, OUTPUT);
-    digitalWrite(EN_PIN, HIGH);
-
-    kbus.begin(9600, SERIAL_8E1); //for leonardo and teensy 3
-    // UCSR1C = 0x26; // manually set register to SERIAL_8E1 for teensy 2 (leonardo too)
-    // kbus.begin(9600);
     kbus_print("adcurtin");
 
     display_timer.begin(print_buffer, 3000000);
