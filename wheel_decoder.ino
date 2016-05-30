@@ -40,8 +40,8 @@ usb_serial_class & logfile = Serial; //teensy 3
 //teensy 3 serial2 is pins rx:9 and tx:10
 //teensy 3 serial3 is pins rx:7 and tx:8
 HardwareSerial & bc127 = Serial3;
-//make sure in increase serila buffer size to catch startup!
-//./hardware/teensy/avr/cores/teensy3/serial3.c
+//make sure in increase serial buffer size to catch startup! make it 255
+// /Applications/Arduino.app/Contents/Java ./hardware/teensy/avr/cores/teensy3/serial3.c
 
 byte music_playing = 0;
 
@@ -506,12 +506,13 @@ void print_buffer()
     //buf_len = 9
     if (buf_i >= buf_len){
         buf_i = 0;
-        if(int_count >= 10 && music_playing){ //only get new data when done printing a message
-            // bc127.clear();
-            // bc127_command("AVRCP_META_DATA 11");
-            getMetadata = 1;
-            int_count = 0;
-        }
+    }
+
+    if(int_count >= 10 && music_playing){ //since we're only resetting the display on new data, try every time
+        // bc127.clear();
+        // bc127_command("AVRCP_META_DATA 11");
+        getMetadata = 1;
+        int_count = 0;
     }
 
     int_count++;
@@ -699,16 +700,23 @@ void read_and_parse_bc127_packet()
     {
         //0xc6 is a speaker in the e46 business cd
         title = (char) 0xc6 + bc127_buffer.substring(19, bc127_buffer.length() - 1);  // length() - 1 to trim the /r
+        //fix UTF encodings
+        sanitize(title);
+
     }
     else if (bc127_buffer.startsWith("AVRCP_MEDIA ARTIST: "))
     {
         //0xc4 is a music note in the e46 business cd
         artist = (char) 0xc4 + bc127_buffer.substring(20, bc127_buffer.length() - 1);  // length() - 1 to trim the /r
+        //fix UTF encodings
+        sanitize(artist);
     }
     else if (bc127_buffer.startsWith("AVRCP_MEDIA ALBUM: "))
     {
         album = bc127_buffer.substring(19, bc127_buffer.length() - 1); // length() - 1 to trim the /r
         // update_display_buffer(album, 0);
+        //fix UTF encodings
+        sanitize(album);
 
         if ( title.compareTo(oldTitle) != 0 || artist.compareTo(oldArtist) != 0)
         {
@@ -766,6 +774,76 @@ void metadata_request()
     #endif
     // bc127_command("AVRCP_META_DATA 11");
     getMetadata = 1;
+}
+
+void sanitize(String & str){
+    int i;
+
+    i = str.indexOf(F("\xe2"));
+    while(i != -1){
+        //following is for determining exactly what special chars are
+        #ifdef DEBUG
+        #ifdef TIMESTAMPS
+        printTime();
+        #endif
+        logfile.print(F("sanitize chars :"));
+        for (int j = 0; j < 3; j++){
+            logfile.print(str.charAt(i+j), HEX);
+            logfile.print(F(":"));
+        }
+        logfile.print(F("\r" NEWLINE_CHAR));
+        #endif
+
+
+        String c = "";
+        String unicode = str.substring(i+1, i+3);
+        if (unicode == "\x80\x99") c = "'"; //"\xe2\x80\x99" is the unicode ' char, aka â€™
+        else if (unicode == "\x80\x9c" || unicode == "\x80\x9d") c = "\"";
+        // else if (unicode == "\x80\xa2") c = "\xc3"; //hopefully this won't mess up below. It's the dot in the e46
+
+        if (c.length() > 0) str = str.substring(0,i) + c + str.substring(i+3);
+        else str = str.substring(0,i) + str.substring(i+2);
+        i = str.indexOf(F("\xe2"));
+    }
+
+    i = str.indexOf(F("\xc3"));
+    while(i != -1){
+        #ifdef DEBUG
+        #ifdef TIMESTAMPS
+        printTime();
+        #endif
+        logfile.print(F("sanitize chars :"));
+        for (int j = 0; j < 2; j++){
+            logfile.print(str.charAt(i+j), HEX);
+            logfile.print(F(":"));
+        }
+        logfile.print(F("\r" NEWLINE_CHAR));
+        #endif
+        String c = "";
+        switch (str.charAt(i+1)) {
+            case 0xa6: //æ
+                c = "ae";
+                break;
+            case 0xa9: //é
+                c = "e";
+                break;
+            case 0xad: //æ
+                c = "i";
+                break;
+            case 0xb3: //ó
+                c = "o";
+                break;
+            case 0xb6: //ö
+                c = "\xa5"; //this one's in the radio :)
+                break;
+            default:
+                c = "";
+                break;
+        }
+        if (c.length() > 0) str = str.substring(0,i) + c + str.substring(i+2);
+        // else str = str.substring(0,i) + str.substring(i+1);
+        i = str.indexOf(F("\xc3"));
+    }
 }
 
 #ifdef TIMESTAMPS
