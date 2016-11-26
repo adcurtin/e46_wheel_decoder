@@ -13,9 +13,9 @@ byte kbus_data[32] = { 0 };
 
 void setup(){
 
-    pinMode(PLAY_PIN, OUTPUT);
-    pinMode(NEXT_PIN, OUTPUT);
-    pinMode(PREV_PIN, OUTPUT);
+    pinMode(PLAY_PIN, INPUT);
+    pinMode(NEXT_PIN, INPUT);
+    pinMode(PREV_PIN, INPUT);
     digitalWrite(PLAY_PIN, LOW);
     digitalWrite(NEXT_PIN, LOW);
     digitalWrite(PREV_PIN, LOW);
@@ -45,6 +45,7 @@ void loop(){
  *      kbus_data[]     contains kbus packet
  */
 int read_kbus_packet(){
+    elapsedMillis kbus_timeout = 0;
     if(kbus.available() > 1){
         kbus_data[0] = kbus.read(); //first byte of message is ID of sending device
         kbus_data[1] = kbus.read(); //second byte is bytes remaining in packet
@@ -53,13 +54,18 @@ int read_kbus_packet(){
     }
 
     for(int i = 0; i < kbus_data[1]; i++){
-        while(kbus.available() == 0){} //wait for data to be available
-        kbus_data[2 + i] = kbus.read();
+        while(kbus_timeout < 500){
+            if(kbus.available()){
+                kbus_data[2 + i] = kbus.read();
+                break; //out of while loop, read next data
+            }
+        } //wait for data to be available
     }
 
     byte crc = checksum(kbus_data, 2 + kbus_data[1]);
 
     if(kbus_data[1 + kbus_data[1]] != crc){
+        kbus.clear(); //we might've gotten out of sync. throw everything away, hopefully not in the middle of a packet
         return 0; //no valid bytes read. can't really handle errors.
     }
 
@@ -103,6 +109,7 @@ void parse_packet(){
             } else if(kbus_data[4] == 0x90){ //held
                 //if held, this is hold the play button, the press function will
                 //release it when the button is released.
+                pinMode(PLAY_PIN, OUTPUT);
                 digitalWrite(PLAY_PIN, HIGH);
                 // usb.println("play held");
             } else if(kbus_data[4] == 0xA0){ //released
@@ -174,7 +181,9 @@ void kbus_print(String message){
 
 //press a button for 200ms
 void press(int pin){
+    pinMode(pin, OUTPUT);
     digitalWrite(pin, HIGH);
     delay(200);
     digitalWrite(pin, LOW);
+    pinMode(pin, INPUT);
 }
