@@ -1,3 +1,6 @@
+#include <elapsedMillis.h>
+
+
 #define EN_PIN 2
 
 #define PLAY_PIN 5
@@ -65,7 +68,10 @@ int read_kbus_packet(){
     byte crc = checksum(kbus_data, 2 + kbus_data[1]);
 
     if(kbus_data[1 + kbus_data[1]] != crc){
-        kbus.clear(); //we might've gotten out of sync. throw everything away, hopefully not in the middle of a packet
+        // kbus.clear(); //we might've gotten out of sync. throw everything away, hopefully not in the middle of a packet
+        while(Serial.available()){  //read until buffer empty
+            Serial.read();  //but do nothing with the data
+        }
         return 0; //no valid bytes read. can't really handle errors.
     }
 
