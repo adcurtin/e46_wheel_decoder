@@ -3,9 +3,11 @@
 
 #define EN_PIN 2
 
+#define V_GND_PIN 4
 #define PLAY_PIN 5
 #define NEXT_PIN 6
 #define PREV_PIN 7
+
 
 HardwareSerial & kbus = Serial1;
 // HardwareSerial & usb = Serial;
@@ -16,9 +18,11 @@ byte kbus_data[32] = { 0 };
 
 void setup(){
 
+    pinMode(V_GND_PIN, INPUT);
     pinMode(PLAY_PIN, INPUT);
     pinMode(NEXT_PIN, INPUT);
     pinMode(PREV_PIN, INPUT);
+    digitalWrite(V_GND_PIN, LOW);
     digitalWrite(PLAY_PIN, LOW);
     digitalWrite(NEXT_PIN, LOW);
     digitalWrite(PREV_PIN, LOW);
@@ -187,9 +191,13 @@ void kbus_print(String message){
 
 //press a button for 200ms
 void press(int pin){
+    pinMode(V_GND_PIN, OUTPUT);
+    digitalWrite(V_GND_PIN, LOW); //set the low side of the voltage dividers to gnd
     pinMode(pin, OUTPUT);
     digitalWrite(pin, HIGH);
     delay(200);
     digitalWrite(pin, LOW);
     pinMode(pin, INPUT);
+    digitalWrite(V_GND_PIN, LOW); //make sure low side goes back to HiZ
+    pinMode(V_GND_PIN, INPUT);
 }
