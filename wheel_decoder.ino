@@ -3,7 +3,7 @@
 
 #define EN_PIN 2
 
-#define V_GND_PIN 4
+#define RELAY_PIN 4
 #define PLAY_PIN 5
 #define NEXT_PIN 6
 #define PREV_PIN 7
@@ -18,15 +18,16 @@ byte kbus_data[32] = { 0 };
 
 void setup(){
 
-    pinMode(V_GND_PIN, INPUT);
+    pinMode(RELAY_PIN, INPUT);
     pinMode(PLAY_PIN, INPUT);
     pinMode(NEXT_PIN, INPUT);
     pinMode(PREV_PIN, INPUT);
-    digitalWrite(V_GND_PIN, LOW);
+    digitalWrite(RELAY_PIN, LOW);
     digitalWrite(PLAY_PIN, LOW);
     digitalWrite(NEXT_PIN, LOW);
     digitalWrite(PREV_PIN, LOW);
 
+    //serial comms
     pinMode(0, INPUT_PULLUP);
 
     pinMode(EN_PIN, OUTPUT);
@@ -119,8 +120,7 @@ void parse_packet(){
             } else if(kbus_data[4] == 0x90){ //held
                 //if held, this is hold the play button, the press function will
                 //release it when the button is released.
-                pinMode(PLAY_PIN, OUTPUT);
-                digitalWrite(PLAY_PIN, HIGH);
+                button_press(PLAY_PIN);
                 // usb.println("play held");
             } else if(kbus_data[4] == 0xA0){ //released
                 press(PLAY_PIN);
@@ -191,13 +191,25 @@ void kbus_print(String message){
 
 //press a button for 200ms
 void press(int pin){
-    pinMode(V_GND_PIN, OUTPUT);
-    digitalWrite(V_GND_PIN, LOW); //set the low side of the voltage dividers to gnd
-    pinMode(pin, OUTPUT);
-    digitalWrite(pin, HIGH);
+    button_press(pin);
     delay(200);
+    button_release(pin);
+}
+
+void button_press(int pin){
+    //relay pin low to press
+    pinMode(pin, OUTPUT);
+    pinMode(RELAY_PIN, OUTPUT);
+    digitalWrite(pin, HIGH);
+    digitalWrite(RELAY_PIN, LOW);
+}
+
+void button_release(int pin){
+    //relay pin high to release
     digitalWrite(pin, LOW);
+    digitalWrite(RELAY_PIN, HIGH);
+    delay(200);
     pinMode(pin, INPUT);
-    digitalWrite(V_GND_PIN, LOW); //make sure low side goes back to HiZ
-    pinMode(V_GND_PIN, INPUT);
+    digitalWrite(RELAY_PIN, LOW); //make sure low side goes back to HiZ
+    pinMode(RELAY_PIN, INPUT);
 }
